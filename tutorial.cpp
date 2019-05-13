@@ -46,15 +46,14 @@ public:
     void flyto(const BM &bm, vector<double> leaderpos, double rangeshrink = 1.0)
     {
         dim = bm.getDim();
-        shrink = rangeshrink;
         for (int i = 0; i < dim; i++)
         {
             double a = bm.getBounds()[i].first;
             double b = bm.getBounds()[i].second;
-            double minval = leaderpos[i] - ((b - a) * shrink / 2);
+            double minval = leaderpos[i] - ((b - a) * rangeshrink / 2);
             if (minval < a)
                 minval = a;
-            double maxval = leaderpos[i] + ((b - a) * shrink / 2);
+            double maxval = leaderpos[i] + ((b - a) * rangeshrink / 2);
             if (maxval > b)
                 maxval = b;
             x[i] = minval + ((double)rand() / (RAND_MAX + 1.0)) * (maxval - minval);
@@ -106,35 +105,36 @@ class hive
 public:
     vector<bee> swarm;
     vector<membee> membees;
-    int scoutbeecount;
-    int selectedbeecount;
-    int elitebeecount;
-    int selsitescount;
-    int elitesitescount;
+    int scoutbees;
+    int selectedbees;
+    int elitebees;
+    int selectedsites;
+    int elitesites;
     int beestotal;
     int maxfunccounter;
     int maxstag;
     hive(const BM &bm, int scouts, int selbees, int bestbees, int selsites, int bestsites, int maxfunccount, int maxstagnation)
     {
-        scoutbeecount = scouts;
-        selectedbeecount = selbees;
-        elitebeecount = bestbees;
-        selsitescount = selsites;
-        elitesitescount = bestsites;
+        scoutbees = scouts;
+        selectedbees = selbees;
+        elitebees = bestbees;
+        selectedsites = selsites;
+        elitesites = bestsites;
         maxfunccounter = maxfunccount;
         maxstag = maxstagnation;
-        beestotal = selectedbeecount * selsitescount + elitebeecount * elitesitescount + scoutbeecount;
+        beestotal = selectedbees * selectedsites + elitebees * elitesites + scoutbees;
         swarm.resize(beestotal);
         swarm.reserve(beestotal + 1);
-        membees.resize(selsitescount + elitesitescount);
-        membees.reserve(selsitescount + elitesitescount + 1);
+        membees.resize(selectedsites + elitesites);
+        membees.reserve(selectedsites + elitesites + 1);
         srand(time(NULL));
         #pragma omp parallel for
         for (int i = 0; i < beestotal; i++) //hive creation
         {
             swarm[i] = bee(bm);
         }
-        for (int i = 0; i < elitesitescount + selsitescount; i++)
+        #pragma omp parallel for
+        for (int i = 0; i < elitesites + selectedsites; i++)
         {
             membees[i] = membee(bm, swarm[i], 0);
         }
@@ -228,7 +228,7 @@ public:
             beeswap(0, min);
             membees[0] = membee(bm, swarm[0], 0);
             int done = 1;
-            while (done < elitesitescount + selsitescount) 
+            while (done < elitesites + selectedsites) 
             {
                 min = findmin(done, sortrange - intersected);
                 bool inter = false;
@@ -239,7 +239,7 @@ public:
                         inter = true;
                         if (sortrange == intersected) 
                         {
-                            while (done < elitesitescount + selsitescount)
+                            while (done < elitesites + selectedsites)
                             {
                                 min = findmin(done, sortrange);
                                 beeswap(done, min);
@@ -269,10 +269,10 @@ public:
             {
                 if (j >= sortrange - intersected) break;
                 int min = findmin(j, sortrange - intersected);
-                if (swarm[min].v < membees[elitesitescount + selsitescount - 1].v)
+                if (swarm[min].v < membees[elitesites + selectedsites - 1].v)
                 {
-                    int betterthan = elitesitescount + selsitescount - 1;
-                    for (int i = 0; i < elitesitescount + selsitescount; i++)
+                    int betterthan = elitesites + selectedsites - 1;
+                    for (int i = 0; i < elitesites + selectedsites; i++)
                     {
                         if (swarm[min].v < membees[i].v)
                         {
@@ -280,7 +280,7 @@ public:
                             break;
                         }
                     }
-                    if (betterthan < elitesitescount + selsitescount - 1)
+                    if (betterthan < elitesites + selectedsites - 1)
                     {
                         bool inter = false;
                         for (int i = 0; i < betterthan; i++)
@@ -296,9 +296,9 @@ public:
                         beeswap(j, min);
                         if (!inter)
                         {
-                            bool interlist[elitesitescount + selsitescount - betterthan] = {false};
+                            bool interlist[elitesites + selectedsites - betterthan] = {false};
                             int intersections = 0;
-                            for (int i = betterthan; i < elitesitescount + selsitescount; i++)
+                            for (int i = betterthan; i < elitesites + selectedsites; i++)
                             {
                                 if (intersects(bm, i, j))
                                 {
@@ -308,7 +308,7 @@ public:
                             }
                             if (intersections == 0 || INTERSECTION_SCOUTS == 0)
                             {
-                                membeesshift(betterthan, elitesitescount + selsitescount - 1);
+                                membeesshift(betterthan, elitesites + selectedsites - 1);
                                 membees[betterthan].x = swarm[j].x;
                             }
                             else if (INTERSECTION_SCOUTS == 1)
@@ -329,7 +329,7 @@ public:
                             {
                                 int disband;
                                 double min = numeric_limits<double>::max();
-                                for (int i = 0; i < elitesitescount + selsitescount - betterthan; i++)
+                                for (int i = 0; i < elitesites + selectedsites - betterthan; i++)
                                 {
                                     if (interlist[i])
                                     {
@@ -362,12 +362,11 @@ public:
                 else break;
             }
         }
-        // return true;
     }
 
     void sortswarm(const BM &bm, int sortrange)
     {
-        for (int i = 0; i < elitesitescount + selsitescount; i++)
+        for (int i = 0; i < elitesites + selectedsites; i++)
         {
             membee bestbee = membees[i];
             bee bestswarmbee = swarm[i];
@@ -386,17 +385,17 @@ public:
             {
                 swarm[bestnum] = swarm[i];
                 swarm[i] = bestswarmbee;
-                for (int k = 0; k < elitesitescount + selsitescount; k++)
+                for (int k = 0; k < elitesites + selectedsites; k++)
                 {
                     if (bestswarmbee.v < membees[k].v)
                     {
                         membee reserve = membees[k];
                         membees[k] = membee(bm, bestswarmbee, 0);
-                        for (int j = elitesitescount + selsitescount - 1; j > k + 1; j--)
+                        for (int j = elitesites + selectedsites - 1; j > k + 1; j--)
                         {
                             membees[j] = membees[j - 1];
                         }
-                        if (k < elitesitescount + selsitescount - 1)
+                        if (k < elitesites + selectedsites - 1)
                         {
                             membees[k + 1] = reserve;
                         }
@@ -412,12 +411,12 @@ public:
 
     void sortmembees(const BM &bm)
     {
-        for (int i = 0; i < elitesitescount + selsitescount; i++)
+        for (int i = 0; i < elitesites + selectedsites; i++)
         {
             membee best = membees[i];
             int bestnum = i;
             bool ind = false;
-            for (int j = i + 1; j < elitesitescount + selsitescount; j++)
+            for (int j = i + 1; j < elitesites + selectedsites; j++)
             {
                 if (membees[j].v < best.v)
                 {
@@ -436,7 +435,7 @@ public:
         if (INTERSECTION_SQUADS) 
         {
             int b = 0;
-            for (int i = elitesitescount + selsitescount - 1; i > 0; i--)
+            for (int i = elitesites + selectedsites - 1; i > 0; i--)
             {
                 bool inter = false;
                 for (int j = 0; j < i; j++)
@@ -446,9 +445,9 @@ public:
                 }
                 if (inter)
                 {
-                    if (i != elitesitescount + selsitescount - 1) membeesshift(i, elitesitescount + selsitescount - 1, true);
-                    int min = findmin(b, scoutbeecount);
-                    membees[elitesitescount + selsitescount - 1] = membee(bm, swarm[min], 0);
+                    if (i != elitesites + selectedsites - 1) membeesshift(i, elitesites + selectedsites - 1, true);
+                    int min = findmin(b, scoutbees);
+                    membees[elitesites + selectedsites - 1] = membee(bm, swarm[min], 0);
                     beeswap(b, min);
                     b++;
                 }     
@@ -458,15 +457,15 @@ public:
 
     void beesatwork(const BM &bm)
     {
-        for (int i = 0; i < elitesitescount + selsitescount; i++) //squad search cycle
+        for (int i = 0; i < elitesites + selectedsites; i++) //squad search cycle
         {
             membee bestsbee = membees[i];
             bee bestsitebee = swarm[i];
-            if (i < elitesitescount) //best spots squads
+            if (i < elitesites) //best spots squads
             {
                 bool ind = false;
                 #pragma omp parallel for
-                for (int j = scoutbeecount + i * elitebeecount; j < scoutbeecount + (i + 1) * elitebeecount; j++)
+                for (int j = scoutbees + i * elitebees; j < scoutbees + (i + 1) * elitebees; j++)
                 {
                     swarm[j].flyto(bm, membees[i].x, membees[i].rangeshrink);
                     if (swarm[j].v < bestsbee.v && swarm[j].v < bestsitebee.v)
@@ -493,7 +492,7 @@ public:
             {
                 bool ind = false;
                 #pragma omp parallel for
-                for (int j = scoutbeecount + elitesitescount * elitebeecount + (i - elitesitescount) * selectedbeecount; j < scoutbeecount + elitesitescount * elitebeecount + (i - elitesitescount + 1) * selectedbeecount; j++)
+                for (int j = scoutbees + elitesites * elitebees + (i - elitesites) * selectedbees; j < scoutbees + elitesites * elitebees + (i - elitesites + 1) * selectedbees; j++)
                 {
                     swarm[j].flyto(bm, membees[i].x, membees[i].rangeshrink);
                     if (swarm[j].v < bestsbee.v && swarm[j].v < bestsitebee.v)
@@ -528,7 +527,7 @@ public:
             center[i] = (a + b) / 2.0;
         }
         #pragma omp parallel for //num_threads(8)
-        for (int i = 0; i < scoutbeecount; i++)
+        for (int i = 0; i < scoutbees; i++)
         {
             swarm[i].flyto(bm, center);
         }
@@ -546,9 +545,9 @@ public:
             auto end = chrono::high_resolution_clock::now();
             fout2 << chrono::duration_cast<chrono::nanoseconds>(end - begin).count() << ";";
             sortmembees(bm);
-            if (INTERSECTION_0) intsort(bm, scoutbeecount);
+            if (INTERSECTION_0) intsort(bm, scoutbees);
             else 
-            sortswarm(bm, scoutbeecount);
+            sortswarm(bm, scoutbees);
 
             if (membees[0].v < bestfit)
             {
@@ -584,7 +583,7 @@ public:
         {
             swarm[i].~bee();
         }
-        for (int i = 0; i < elitesitescount + selsitescount; i++)
+        for (int i = 0; i < elitesites + selectedsites; i++)
         {
             membees[i].~membee();
         }
@@ -597,17 +596,17 @@ public:
 
 double findMin(const BM &bm, ofstream &fout, int param[8], ofstream &fout2)
 {
-    int scoutbeecount = param[0]; //my parameters
-    int selectedbeecount = param[1];
-    int elitebeecount = param[2];
-    int selsitescount = param[3];
-    int elitesitescount = param[4];
+    int scoutbees = param[0]; //my parameters
+    int selectedbees = param[1];
+    int elitebees = param[2];
+    int selectedsites = param[3];
+    int elitesites = param[4];
     int maxfunccounter = param[5];
     int maxiter = param[6];
     int maxstag = param[7];
-    const int beestotal = selectedbeecount * selsitescount + elitebeecount * elitesitescount + scoutbeecount;
+    const int beestotal = selectedbees * selectedsites + elitebees * elitesites + scoutbees;
     auto begin = chrono::high_resolution_clock::now();
-    hive *h = new hive(bm, scoutbeecount, selectedbeecount, elitebeecount, selsitescount, elitesitescount, maxfunccounter, maxstag);
+    hive *h = new hive(bm, scoutbees, selectedbees, elitebees, selectedsites, elitesites, maxfunccounter, maxstag);
     auto end = chrono::high_resolution_clock::now();
     fout2 << chrono::duration_cast<chrono::nanoseconds>(end - begin).count() << ";";
     if (INTERSECTION_0) h->intsort(bm, beestotal, true);
@@ -697,8 +696,8 @@ main()
             fout << "scouts;" << "selectedbees;" << "elitebees;" << "selectedsquads;" << "elitesquads;";
             fout << "funccounter;" << "maxiter;" << "maxstag;" << "INTERSECTION_0;" << "INTERSECTION_SCOUTS;";
             fout << "INTERSECTION_SQUADS;" << "RANGESHRINK;" << "INITIALSHRINK;" << endl;
-            fout << param[1] << ";" << param[1] << ";" << param[1] << ";" << param[1] << ";" << param[1] << ";";
-            fout << param[1] << ";" << param[1] << ";" << param[1] << ";" << INTERSECTION_0 << ";" << INTERSECTION_SCOUTS << ";";
+            fout << param[0] << ";" << param[1] << ";" << param[2] << ";" << param[3] << ";" << param[4] << ";";
+            fout << param[5] << ";" << param[6] << ";" << param[7] << ";" << INTERSECTION_0 << ";" << INTERSECTION_SCOUTS << ";";
             fout << INTERSECTION_SQUADS << ";" << RANGESHRINK << ";" << INITIALSHRINK << ";" << endl;
         }
 
