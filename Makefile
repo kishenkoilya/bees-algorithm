@@ -1,7 +1,4 @@
-ROOT = ../
-BINS = tutorial.exe tutorialgrad.exe tutorialbnb.exe tutorialbnbmt.exe
-TESTS = tutorial.exe tutorialgrad.exe tutorialbnb.exe tutorialbnbmt.exe
-
-
-include $(ROOT)all.inc
--include deps.inc
+all:
+	c++ -I../ -I../utils tutorial.cpp -o tutorial -fopenmp
+clean:
+	rm -rf *.o tutorial ht
