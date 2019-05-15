@@ -17,9 +17,10 @@ using BM = Benchmark<double>;
 const bool INTERSECTION_0 = true;
 const int INTERSECTION_SCOUTS = 2; //0 = shift; 1 = disband worst; 2 = disband closest;
 const bool INTERSECTION_SQUADS = true;
-const bool DISPLAY_SQUADS = false;
-const double RANGESHRINK = 0.5;
-const double INITIALSHRINK = 0.2;
+const bool DISPLAY_SQUADS = true;
+const double RANGESHRINK = 0.9;
+const double INITIALSHRINK = 0.05;
+const double PRECISION = 0.0;
 
 class bee
 {
@@ -76,7 +77,7 @@ public:
     double rangeshrink;
     int funccounter;
     membee() {}
-    membee(const BM &bm, bee b, int func, double shrink = 1.0)
+    membee(const BM &bm, bee b, int func)
     {
         dim = bm.getDim();
         x.resize(dim);
@@ -84,7 +85,7 @@ public:
         x = b.x;
         v = b.v;
         funccounter = func;
-        if (b.shrink == 1.0 && shrink == 1.0)
+        if (b.shrink == 1.0)
         {
             rangeshrink = INITIALSHRINK; //1.0 / sites;
         }
@@ -533,17 +534,17 @@ public:
         }
     }
 
-    double runcycle(const BM &bm, int maxiter, ofstream &fout, ofstream &fout2)
+    double runcycle(const BM &bm, int maxiter, ofstream &fout, ofstream &fout2, ofstream &fout3)
     {
         double bestfit = numeric_limits<double>::max();
         int stagnationcount = 0;
         int z;
         for (z = 0; z < maxiter; z++)
         {
-            auto begin = chrono::high_resolution_clock::now();
+            // auto begin = chrono::high_resolution_clock::now();
             beesatwork(bm);
-            auto end = chrono::high_resolution_clock::now();
-            fout2 << chrono::duration_cast<chrono::nanoseconds>(end - begin).count() << ";";
+            // auto end = chrono::high_resolution_clock::now();
+            // fout2 << chrono::duration_cast<chrono::nanoseconds>(end - begin).count() << ";";
             sortmembees(bm);
             if (INTERSECTION_0) intsort(bm, scoutbees);
             else 
@@ -568,12 +569,40 @@ public:
             {
                 fout << maxiter << ";";
             }
-            if (bestfit - bm.getGlobMinY() < 0.0001)
+            if (bestfit - bm.getGlobMinY() < PRECISION && PRECISION != 0.0)
             {
                 cout << "algorithm reached appropriate level of precision on iteration N" << z << endl;
                 fout << z << ";";
                 break;
             }
+        }
+        if (DISPLAY_SQUADS)
+        {
+            fout3 << bm.getDesc() << endl;
+            int dim = bm.getDim();
+            double dist;
+            fout3 << " " << bm.getGlobMinY() << ";" << "0;";
+            for (int i = 0; i < dim; i++)
+            {
+                fout3 << " " <<  bm.getGlobMinX()[i] << ";";
+            }
+            fout3 << endl;
+            for (int j = 0; j < elitesites + selectedsites; j++)
+            {
+                dist = 0;
+                fout3 << " " << membees[j].v - bm.getGlobMinY() << ";";
+                for (int i = 0; i < dim; i++)
+                {
+                    dist += (membees[j].x[i] - bm.getGlobMinX()[i]) * (membees[j].x[i] - bm.getGlobMinX()[i]);
+                }
+                fout3 << " " << sqrt(dist) << ";";
+                for (int i = 0; i < dim; i++)
+                {
+                    fout3 << " " << membees[j].x[i] << ";";
+                }
+                fout3 << endl;
+            }
+            fout3 << endl;
         }
         return bestfit;
     }
@@ -594,7 +623,7 @@ public:
     }
 };
 
-double findMin(const BM &bm, ofstream &fout, int param[8], ofstream &fout2)
+double findMin(const BM &bm, ofstream &fout, int param[8], ofstream &fout2, ofstream &fout3)
 {
     int scoutbees = param[0]; //my parameters
     int selectedbees = param[1];
@@ -605,15 +634,15 @@ double findMin(const BM &bm, ofstream &fout, int param[8], ofstream &fout2)
     int maxiter = param[6];
     int maxstag = param[7];
     const int beestotal = selectedbees * selectedsites + elitebees * elitesites + scoutbees;
-    auto begin = chrono::high_resolution_clock::now();
+    // auto begin = chrono::high_resolution_clock::now();
     hive *h = new hive(bm, scoutbees, selectedbees, elitebees, selectedsites, elitesites, maxfunccounter, maxstag);
-    auto end = chrono::high_resolution_clock::now();
-    fout2 << chrono::duration_cast<chrono::nanoseconds>(end - begin).count() << ";";
+    // auto end = chrono::high_resolution_clock::now();
+    // fout2 << chrono::duration_cast<chrono::nanoseconds>(end - begin).count() << ";";
     if (INTERSECTION_0) h->intsort(bm, beestotal, true);
     else h->sortswarm(bm, beestotal);
     h->sortmembees(bm);
 
-    double result = h->runcycle(bm, maxiter, fout, fout2);
+    double result = h->runcycle(bm, maxiter, fout, fout2, fout3);
     cout << "best value = " << result << endl;
     int dim = bm.getDim();
     double distance = 0;
@@ -629,13 +658,13 @@ double findMin(const BM &bm, ofstream &fout, int param[8], ofstream &fout2)
     return result;
 }
 
-bool testBench(const BM &bm, ofstream &fout, int param[8], ofstream &fout2)
+bool testBench(const BM &bm, ofstream &fout, int param[8], ofstream &fout2, ofstream &fout3)
 {
     cout << "*************Testing benchmark**********" << endl;
     cout << bm;
     fout << bm.getDesc() << ";";
     auto begin = chrono::high_resolution_clock::now();
-    double v = findMin(bm, fout, param, fout2);
+    double v = findMin(bm, fout, param, fout2, fout3);
     cout << "the difference is " << v - bm.getGlobMinY() << endl;
     fout << v - bm.getGlobMinY() << ";";
     auto end = chrono::high_resolution_clock::now();
@@ -651,9 +680,14 @@ main()
     ofstream fout("data.csv", ios::app);
     ofstream fout2("execution_time.csv", ios::app);
     int h = 19;
-    for (int i = 0; i < 120; i++)
+    for (int i = 0; i < 5; i++)
     {
-        int param[8] = {100, 30, 60, 5, 3, 3, 5000, 1000};
+        string n1 = "squadresults";
+        string n2 = to_string(i);
+        string n3 = ".csv";
+        string name = n1 + n2 + n3;
+        ofstream fout3(name, ios::app);
+        int param[8] = {100, 50, 100, 5, 3, 3, 5000, 100};
         if (i > 20)
         {
             param[0] = 200;
@@ -709,8 +743,8 @@ main()
         // testBench(bb, fout, param, fout2);
         for (auto bm : tests)
         {
-            testBench(*bm, fout, param, fout2);
-            fout2 << endl;
+            testBench(*bm, fout, param, fout2, fout3);
+            // fout2 << endl;
             // if (t < 10)
             // {
             //     testBench(*bm, fout, param, fout2);
@@ -726,7 +760,7 @@ main()
         cout << "TIME TOTAL: " << chrono::duration_cast<chrono::milliseconds>(end - begin).count() << "ms" << endl;
         fout << chrono::duration_cast<chrono::milliseconds>(end - begin).count() << ";";
         fout << endl;
-        fout2 << endl;
+        // fout2 << endl;
     }
     fout << endl;
 }
